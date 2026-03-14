@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Vocab Quiz Pro - Stats & Save</title>
+    <style>
+        :root { --primary: #4a90e2; --success: #2ecc71; --danger: #e74c3c; --pending: #f1c40f; }
+        body { font-family: 'Pretendard', sans-serif; background: #f8f9fa; display: flex; justify-content: center; padding: 50px 20px; }
+        .main-wrapper { display: flex; gap: 20px; align-items: flex-start; max-width: 1000px; width: 100%; justify-content: center; }
+        .quiz-container { background: white; width: 450px; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); text-align: center; }
+        .status-bar { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 14px; color: #666; }
+        .question-box { margin: 20px 0; min-height: 100px; display: flex; flex-direction: column; justify-content: center; }
+        .type-badge { font-size: 11px; padding: 4px 10px; border-radius: 20px; background: #eee; color: #888; margin-bottom: 10px; align-self: center; }
+        h1 { margin: 10px 0; color: #333; font-size: 2.2rem; word-break: break-all; }
+        input[type="text"], input[type="number"] { width: 90%; padding: 15px; border: 2px solid #eee; border-radius: 12px; font-size: 18px; outline: none; text-align: center; margin-bottom: 10px; }
+        
+        .setup-box { padding: 20px; border: 2px dashed #ddd; border-radius: 15px; text-align: left; }
+        .mode-select { display: flex; gap: 10px; margin-bottom: 20px; }
+        .mode-btn { flex: 1; padding: 12px 5px; border: 2px solid #eee; border-radius: 10px; cursor: pointer; background: white; font-size: 13px; }
+        .mode-btn.active { border-color: var(--primary); background: #eef6ff; color: var(--primary); font-weight: bold; }
+
+        .count-setting { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+        .limit-btn { background: #eee; border: none; padding: 10px 15px; border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: bold; }
+
+        .btn-check { background: var(--primary); color: white; border: none; padding: 12px 40px; border-radius: 12px; cursor: pointer; font-weight: bold; width: 95%; }
+        #resultMsg { margin-top: 15px; font-weight: bold; min-height: 24px; font-size: 0.95rem; }
+
+        /* 상태판 및 통계 표 */
+        .side-panel { background: white; width: 150px; padding: 20px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); max-height: 600px; overflow-y: auto; }
+        .dot-container { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+        .dot { width: 25px; height: 25px; border-radius: 50%; background: var(--pending); color: white; font-size: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; border: none; }
+        .dot.correct { background: var(--success); }
+        .dot.wrong { background: var(--danger); }
+        .dot.active { border: 2px solid #333; transform: scale(1.1); font-weight: bold; }
+
+        .report-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13px; }
+        .report-table th, .report-table td { border: 1px solid #eee; padding: 10px; text-align: left; }
+        .report-table th { background: #f9f9f9; }
+        .txt-wrong { color: var(--danger); text-decoration: line-through; }
+        .txt-correct { color: var(--success); font-weight: bold; }
+
+        .btn-action { width: 100%; border: none; padding: 12px; border-radius: 12px; cursor: pointer; font-weight: bold; margin-top: 10px; }
+        .btn-retry-wrong { background: var(--danger); color: white; }
+        label { font-size: 14px; font-weight: bold; display: block; margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+
+<div class="main-wrapper">
+    <div class="quiz-container">
+        <h3 id="mainTitle">Vocab Quiz Pro</h3>
+        
+        <div id="setupSection" class="setup-box">
+            <label>1. 퀴즈 모드 선택</label>
+            <div class="mode-select">
+                <button class="mode-btn active" id="modeWord" onclick="setMode('word')">단어 -> 뜻</button>
+                <button class="mode-btn" id="modeMeaning" onclick="setMode('meaning')">뜻 -> 단어</button>
+                <button class="mode-btn" id="modeRandom" onclick="setMode('random')">랜덤 섞기</button>
+            </div>
+            <label>2. 파일 선택</label>
+            <input type="file" id="csvFile" accept=".csv" style="margin-bottom: 20px; width: 100%;">
+            <div id="countConfig" style="display:none;">
+                <label>3. 문제 개수 설정 (최대: <span id="maxLabel">0</span>개)</label>
+                <div class="count-setting">
+                    <button class="limit-btn" onclick="setLimit('min')">Min</button>
+                    <input type="number" id="quizCountInput" min="1">
+                    <button class="limit-btn" onclick="setLimit('max')">Max</button>
+                </div>
+                <button class="btn-action" style="background:var(--primary); color:white; margin-top:20px;" onclick="startValidation()">퀴즈 시작!</button>
+            </div>
+            <div id="resumeConfig" style="display:none; margin-top:20px; padding-top:20px; border-top:1px solid #eee;">
+                <p style="font-size:12px; color:var(--primary); font-weight:bold;">💡 이전에 풀던 기록이 있습니다!</p>
+                <button class="btn-action" style="background:#333; color:white;" onclick="resumeQuiz()">기존 기록 이어서 풀기</button>
+            </div>
+        </div>
+
+        <div id="quizSection" style="display:none;">
+            <div class="status-bar">
+                <span>진행: <b id="progressText">0 / 0</b></span>
+                <span>정답: <b id="scoreCount" style="color:var(--success)">0</b></span>
+            </div>
+            <div class="question-box">
+                <span id="quizType" class="type-badge"></span>
+                <h1 id="displayWord">...</h1>
+            </div>
+            <input type="text" id="answerInput" placeholder="정답 입력 후 Enter" autocomplete="off">
+            <button class="btn-check" id="checkBtn" onclick="processAnswer()">정답 확인 (Enter)</button>
+            <div id="resultMsg"></div>
+            <button class="btn-action" id="finishBtn" onclick="finishQuiz()" style="display:none; background:#333; color:white;">최종 결과 보기</button>
+        </div>
+
+        <div id="finalSection" style="display:none;">
+            <h2>학습 결과</h2>
+            <h1 id="finalResultText" style="color: var(--primary);"></h1>
+            <div id="wrongReport"></div>
+            <button class="btn-action btn-retry-wrong" id="retryWrongBtn" onclick="retryWrongs()">오답만 다시 풀기</button>
+            <button class="btn-action" style="background:#ddd" onclick="resetAll()">처음부터 다시하기 (기록삭제)</button>
+        </div>
+    </div>
+
+    <div id="sidePanel" class="side-panel" style="display:none;">
+        <h4 style="margin-top:0; font-size:14px; text-align:center;">현황판</h4>
+        <div id="dotContainer" class="dot-container"></div>
+    </div>
+</div>
+
+<script>
+    let masterData = [];
+    let currentData = [];
+    let currentIndex = 0;
+    let selectedMode = 'word';
+
+    // 1. 저장된 데이터 확인 (로컬 스토리지)
+    window.onload = () => {
+        const saved = localStorage.getItem('vocabQuizData');
+        if (saved) {
+            document.getElementById('resumeConfig').style.display = 'block';
+        }
+    }
+
+    function setMode(mode) {
+        selectedMode = mode;
+        document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById('mode' + mode.charAt(0).toUpperCase() + mode.slice(1)).classList.add('active');
+    }
+
+    function setLimit(type) {
+        const input = document.getElementById('quizCountInput');
+        input.value = (type === 'min') ? 1 : masterData.length;
+    }
+
+    document.getElementById('csvFile').onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const rows = event.target.result.split(/\r?\n/);
+            masterData = rows.map(r => {
+                const parts = r.split(',').map(p => p.replace(/^"|"$/g, '').trim());
+                return { word: parts[0], meaning: parts[1] };
+            }).filter(obj => obj.word && obj.meaning);
+            document.getElementById('countConfig').style.display = 'block';
+            document.getElementById('maxLabel').innerText = masterData.length;
+            document.getElementById('quizCountInput').value = Math.min(80, masterData.length);
+        };
+        reader.readAsText(file, 'UTF-8');
+    };
+
+    function startValidation() {
+        let count = parseInt(document.getElementById('quizCountInput').value);
+        if (isNaN(count) || count < 1) count = 1;
+        startNewQuiz(masterData.sort(() => Math.random() - 0.5).slice(0, count));
+    }
+
+    function startNewQuiz(dataList) {
+        currentData = dataList.map(item => ({
+            ...item, 
+            status: 'pending', 
+            userAns: '', 
+            mode: selectedMode === 'word' ? true : (selectedMode === 'meaning' ? false : Math.random() > 0.5)
+        }));
+        currentIndex = 0;
+        saveProgress();
+        initUI();
+    }
+
+    function resumeQuiz() {
+        const saved = JSON.parse(localStorage.getItem('vocabQuizData'));
+        currentData = saved.data;
+        currentIndex = saved.index;
+        selectedMode = saved.mode;
+        initUI();
+    }
+
+    function initUI() {
+        document.getElementById('setupSection').style.display = 'none';
+        document.getElementById('quizSection').style.display = 'block';
+        document.getElementById('sidePanel').style.display = 'block';
+        document.getElementById('finalSection').style.display = 'none';
+        loadQuestion();
+    }
+
+    function saveProgress() {
+        localStorage.setItem('vocabQuizData', JSON.stringify({
+            data: currentData,
+            index: currentIndex,
+            mode: selectedMode
+        }));
+    }
+
+    function renderDots() {
+        const container = document.getElementById('dotContainer');
+        container.innerHTML = '';
+        currentData.forEach((item, idx) => {
+            const dot = document.createElement('button');
+            dot.className = `dot ${item.status} ${idx === currentIndex ? 'active' : ''}`;
+            dot.innerText = idx + 1;
+            dot.onclick = () => jumpTo(idx);
+            container.appendChild(dot);
+        });
+        document.getElementById('finishBtn').style.display = currentData.every(i => i.status !== 'pending') ? 'block' : 'none';
+    }
+
+    function loadQuestion() {
+        const item = currentData[currentIndex];
+        document.getElementById('progressText').innerText = `${currentIndex + 1} / ${currentData.length}`;
+        document.getElementById('scoreCount').innerText = currentData.filter(i => i.status === 'correct').length;
+        document.getElementById('quizType').innerText = item.mode ? "뜻을 입력하세요" : "영단어를 입력하세요";
+        document.getElementById('displayWord').innerText = item.mode ? item.word : item.meaning;
+        
+        const input = document.getElementById('answerInput');
+        const msg = document.getElementById('resultMsg');
+        input.disabled = false;
+        if (item.status === 'pending') { input.value = ''; msg.innerText = ''; }
+        else {
+            input.value = item.userAns;
+            msg.innerText = item.status === 'correct' ? "✅ 정답!" : `❌ 오답! 정답: ${item.mode ? item.meaning : item.word}`;
+            msg.style.color = item.status === 'correct' ? "var(--success)" : "var(--danger)";
+        }
+        renderDots();
+        input.focus();
+    }
+
+    function processAnswer() {
+        const item = currentData[currentIndex];
+        if (item.status !== 'pending') { if (currentIndex < currentData.length - 1) moveNext(); return; }
+        const val = document.getElementById('answerInput').value.trim().toLowerCase();
+        if (!val) return;
+
+        item.userAns = val;
+        let correctStr = item.mode ? item.meaning : item.word;
+        let isCorrect = item.mode ? 
+            correctStr.split(/[,/|;]/).map(s => s.trim().toLowerCase()).includes(val) : 
+            correctStr.toLowerCase() === val;
+
+        item.status = isCorrect ? 'correct' : 'wrong';
+        saveProgress();
+        loadQuestion();
+        if(isCorrect && currentIndex < currentData.length - 1) setTimeout(moveNext, 800);
+    }
+
+    function moveNext() { currentIndex++; saveProgress(); loadQuestion(); }
+    function jumpTo(idx) { currentIndex = idx; saveProgress(); loadQuestion(); }
+    document.getElementById('answerInput').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); processAnswer(); } };
+
+    function finishQuiz() {
+        document.getElementById('quizSection').style.display = 'none';
+        document.getElementById('sidePanel').style.display = 'none';
+        document.getElementById('finalSection').style.display = 'block';
+        
+        const correctCount = currentData.filter(i => i.status === 'correct').length;
+        document.getElementById('finalResultText').innerText = `${correctCount} / ${currentData.length}`;
+        
+        // 오답 리포트 생성
+        const wrongs = currentData.filter(i => i.status === 'wrong');
+        let html = '<h4>오답 분석</h4><table class="report-table"><tr><th>문제</th><th>나의 오답</th><th>정답</th></tr>';
+        wrongs.forEach(i => {
+            html += `<tr><td>${i.mode ? i.word : i.meaning}</td><td class="txt-wrong">${i.userAns}</td><td class="txt-correct">${i.mode ? i.meaning : i.word}</td></tr>`;
+        });
+        html += '</table>';
+        document.getElementById('wrongReport').innerHTML = wrongs.length > 0 ? html : '<p>와우! 틀린 문제가 없습니다!</p>';
+        document.getElementById('retryWrongBtn').style.display = wrongs.length > 0 ? 'block' : 'none';
+    }
+
+    function retryWrongs() {
+        const wrongs = currentData.filter(i => i.status === 'wrong').map(i => ({ word: i.word, meaning: i.meaning }));
+        startNewQuiz(wrongs);
+    }
+
+    function resetAll() {
+        localStorage.removeItem('vocabQuizData');
+        location.reload();
+    }
+</script>
+
+</body>
+</html>
