@@ -258,7 +258,7 @@
             html += `<tr><td>${i.mode ? i.word : i.meaning}</td><td class="txt-wrong">${i.userAns}</td><td class="txt-correct">${i.mode ? i.meaning : i.word}</td></tr>`;
         });
         html += '</table>';
-        document.getElementById('wrongReport').innerHTML = wrongs.length > 0 ? html : '<p>와우! 틀린 문제가 없습니다!</p>';
+        document.getElementById('wrongReport').innerHTML = wrongs.length > 0 ? html : '<p>다 끝났음!</p>';
         document.getElementById('retryWrongBtn').style.display = wrongs.length > 0 ? 'block' : 'none';
     }
 
